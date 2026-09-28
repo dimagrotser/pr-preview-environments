@@ -103,7 +103,7 @@ jobs:
           cat > comment.md <<EOF
           ### Preview environment for PR #$PR
 
-          | | |
+          | Check | Result |
           | --- | --- |
           | Status | $status |
           | Namespace | \`pr-$PR\` |
