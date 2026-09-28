@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview app</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <p class="banner" data-testid="banner">Loading environment…</p>
+      <h1>Preview app</h1>
+      <p class="lead">A small frontend that reads everything it shows from the API in the same namespace.</p>
+    </header>
+
+    <main>
+      <ul class="items" data-testid="items"></ul>
+      <p class="error" data-testid="error" hidden></p>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

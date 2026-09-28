@@ -1,0 +1,128 @@
+name: PR preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: preview-pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+env:
+  PR: ${{ github.event.number }}
+  SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: apps/api/.python-version
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+      - run: make api-install
+      - run: make test
+      - run: make lint
+      - run: make chart-lint
+
+  preview:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Collect environment facts
+        run: |
+          echo "SHA=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)" >> "$GITHUB_ENV"
+          echo "PREVIEW_URL=http://pr-$PR.preview.localhost:8080" >> "$GITHUB_ENV"
+          echo "REPORT_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-$PR/" >> "$GITHUB_ENV"
+
+      - name: Install k3d
+        run: curl -sfL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.9.0 bash
+
+      - name: Create cluster
+        run: k3d cluster create --config k3d/cluster.yaml
+
+      # Chromium resolves the preview host through the system resolver, which on
+      # the runner does not synthesise *.localhost.
+      - name: Resolve the preview host
+        run: echo "127.0.0.1 pr-$PR.preview.localhost" | sudo tee -a /etc/hosts
+
+      - name: Deploy the preview
+        run: ./scripts/preview-deploy.sh "$PR" "$SHA"
+
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Run e2e tests
+        id: e2e
+        continue-on-error: true
+        working-directory: e2e
+        env:
+          PR_NUMBER: ${{ env.PR }}
+          GIT_SHA: ${{ env.SHA }}
+        run: npm test
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: playwright-report-pr-${{ env.PR }}
+          path: e2e/playwright-report
+          retention-days: 7
+
+      # Pull requests from forks get a read-only token, so publishing and
+      # commenting are skipped there. The tests above still run and still gate
+      # the merge.
+      - name: Publish the report to Pages
+        if: always() && env.SAME_REPO == 'true'
+        run: python3 scripts/publish-report.py "$PR"
+
+      - name: Comment on the pull request
+        if: always() && env.SAME_REPO == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          status=$([ "${{ steps.e2e.outcome }}" = "success" ] && echo "✅ passed" || echo "❌ failed")
+          summary=$(python3 scripts/test-summary.py e2e/results.json 2>/dev/null || echo 'no test results')
+
+          cat > comment.md <<EOF
+          ### Preview environment for PR #$PR
+
+          | | |
+          | --- | --- |
+          | Status | $status |
+          | Namespace | \`pr-$PR\` |
+          | Image tag | \`sha-$SHA\` |
+          | URL | $PREVIEW_URL |
+
+          $summary
+
+          [Playwright report]($REPORT_URL) · [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          Reproduce locally: \`make cluster-up && make preview PR=$PR\`
+          EOF
+
+          python3 scripts/pr-comment.py "$PR" comment.md
+
+      - name: Fail when tests failed
+        if: steps.e2e.outcome == 'failure'
+        run: exit 1
+
+      - name: Delete cluster
+        if: always()
+        run: k3d cluster delete preview

@@ -1,0 +1,6 @@
+.venv
+tests
+.dockerignore
+Dockerfile
+requirements-dev.txt
+ruff.toml

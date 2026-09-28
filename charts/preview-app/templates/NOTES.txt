@@ -1,0 +1,6 @@
+Preview for PR #{{ include "preview.pr" . }} is up:
+
+  http://{{ include "preview.host" . }}:{{ .Values.port }}
+
+  kubectl -n {{ .Release.Namespace }} get pods
+  kubectl -n {{ .Release.Namespace }} logs deploy/api

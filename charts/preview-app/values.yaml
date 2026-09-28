@@ -1,0 +1,34 @@
+# The pull request number. Required: it decides the ingress host and the labels
+# used to find the environment later.
+pr: ""
+
+domain: preview.localhost
+# Host port the k3d load balancer is published on. Only used in the notes.
+port: 8080
+commit: dev
+replicas: 1
+
+web:
+  image:
+    repository: preview-web
+    tag: dev
+    pullPolicy: IfNotPresent
+  port: 8080
+
+api:
+  image:
+    repository: preview-api
+    tag: dev
+    pullPolicy: IfNotPresent
+  port: 3000
+
+ingress:
+  className: traefik
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

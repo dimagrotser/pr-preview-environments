@@ -1,0 +1,47 @@
+name: PR preview cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: preview-pr-${{ github.event.number }}
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      PR: ${{ github.event.number }}
+      HAS_KUBECONFIG: ${{ secrets.PREVIEW_KUBECONFIG != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Remove the report from Pages
+        run: python3 scripts/publish-report.py "$PR" --remove
+
+      # Only relevant when the preview lives on a long-lived cluster reachable
+      # from CI. Without the secret the namespace died with its runner.
+      - name: Delete the namespace
+        if: env.HAS_KUBECONFIG == 'true'
+        env:
+          KUBECONFIG: /tmp/preview.kubeconfig
+        run: |
+          echo "${{ secrets.PREVIEW_KUBECONFIG }}" | base64 -d > "$KUBECONFIG"
+          ./scripts/preview-destroy.sh "$PR"
+
+      - name: Update the pull request comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cat > comment.md <<EOF
+          ### Preview environment for PR #$PR
+
+          Destroyed. The namespace \`pr-$PR\` and the published Playwright report are gone.
+          EOF
+
+          python3 scripts/pr-comment.py "$PR" comment.md
