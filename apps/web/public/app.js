@@ -19,7 +19,7 @@ async function render() {
     ...data.items.map((item) => {
       const li = document.createElement('li');
       li.dataset.status = item.status;
-      li.textContent = item.name;
+      li.textContent = item.title;
       return li;
     }),
   );
