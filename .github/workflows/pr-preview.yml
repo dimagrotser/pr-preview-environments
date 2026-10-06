@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 concurrency:
   group: preview-pr-${{ github.event.number }}
@@ -77,6 +78,14 @@ jobs:
           PR_NUMBER: ${{ env.PR }}
           GIT_SHA: ${{ env.SHA }}
         run: npm test
+
+      - uses: dimagrotser/ai-test-failure-triage@5e459da8c6c6d71fb66f8779746eea08f451c5df # v1.0.0
+        if: ${{ !cancelled() }}
+        with:
+          playwright: e2e/results.json
+          comment-key: preview
+          comment: ${{ env.SAME_REPO }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
