@@ -22,6 +22,23 @@ flowchart TD
     I --> K[report folder removed from Pages]
 ```
 
+## What a reviewer sees
+
+One comment per pull request, rewritten on every push instead of a new one being
+added:
+
+![The comment on a pull request whose tests passed](docs/screenshots/pr-comment.png)
+
+When something breaks, the comment names the test that failed and the required
+`preview` check goes red, which is what stops the merge:
+
+![The same comment after a failing run](docs/screenshots/pr-comment-failed.png)
+
+Behind the link is the full Playwright report, published per pull request and
+deleted when it closes. Failed tests keep their trace:
+
+![The published Playwright report with one failing test](docs/screenshots/playwright-report.png)
+
 ## Quickstart
 
 Needs `docker`, `k3d`, `kubectl`, `helm`, Python 3.14 and Node.js 24 (versions in
